@@ -94,10 +94,6 @@ def _largest_face_center(gray, cascade, w, h):
 
 
 def verify_action_frames(action: str, bgr_frames: list) -> tuple:
-    """
-    校验多帧是否完成指定动作。
-    返回 (ok: bool, message: str, details: dict)
-    """
     if action not in _ACTION_PROMPTS:
         return False, "未知的动作类型", {}
 

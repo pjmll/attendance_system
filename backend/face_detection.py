@@ -137,13 +137,12 @@ class FaceDetector:
             if w < Config.MIN_FACE_SIZE:
                 continue
                 
-            # Expand bounding box slightly for DeepFace emotion crop later
             pad_w = int(w * 0.1)
             pad_h = int(h * 0.1)
             
             face_data = {
                 "facial_area": {"x": x, "y": y, "w": w, "h": h},
-                "face": image_bgr[max(0, y-pad_h):y2+pad_h, max(0, x-pad_w):x2+pad_w], # approximate crop for emotion
+                "face": image_bgr[max(0, y-pad_h):y2+pad_h, max(0, x-pad_w):x2+pad_w],
                 "embedding": face.normed_embedding if face.normed_embedding is not None else face.embedding,
                 "gender": face.sex, 
             }
