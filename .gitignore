@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.pyre/
+.mypy_cache/
+.python-version
+.env
+.env.*
+venv/
+ENV/
+env/
+.venv/
+
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Data files
+*.sqlite3
+*.db
+*.db-journal
+
+# Logs
+*.log
+logs/
+
+# Uploaded snapshots and face DB caches
+backend/static/face_db/
+backend/static/snapshots/
+backend/static/uploads/
+
+# Deepface / insightface caches
+.deepface/
+.insightface/
+
+# Python package artifacts
+*.egg-info/
+build/
+dist/
+.eggs/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Others
+*.bak
+*.tmp
+*.swp
+*~

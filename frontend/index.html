@@ -1,0 +1,1188 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>武大考勤系统</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/element-ui/2.15.13/theme-chalk/index.css"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <div id="app">
+      <section v-if="!isAuthenticated" class="login-screen">
+        <div class="login-card">
+          <div class="login-mark">
+            <div class="login-mark-icon"></div>
+          </div>
+          <h1 class="login-title">智慧课堂管理平台</h1>
+          <p class="login-subtitle">武汉大学 · 课堂考勤与情绪分析系统</p>
+
+          <div class="role-toggle">
+            <button
+              type="button"
+              class="role-toggle-btn"
+              :class="{ active: loginForm.role === 'teacher' }"
+              @click="loginForm.role = 'teacher'"
+            >
+              教师
+            </button>
+            <button
+              type="button"
+              class="role-toggle-btn"
+              :class="{ active: loginForm.role === 'student' }"
+              @click="loginForm.role = 'student'"
+            >
+              学生
+            </button>
+          </div>
+
+          <form class="login-form" @submit.prevent="handleLogin">
+            <label class="field-block">
+              <span class="field-label">用户名</span>
+              <span class="field-shell">
+                <span class="field-icon">👤</span>
+                <input
+                  v-model.trim="loginForm.username"
+                  type="text"
+                  placeholder="请输入用户名"
+                />
+              </span>
+            </label>
+
+            <label class="field-block">
+              <span class="field-label">密码</span>
+              <span class="field-shell">
+                <span class="field-icon">🔒</span>
+                <input
+                  v-model.trim="loginForm.password"
+                  type="password"
+                  placeholder="请输入密码"
+                />
+              </span>
+            </label>
+
+            <button type="submit" class="primary-login-btn" :disabled="loading">
+              {{ loading ? '进入中...' : '登录' }}
+            </button>
+          </form>
+
+          <button type="button" class="ghost-link">忘记密码？</button>
+        </div>
+      </section>
+
+      <section v-else class="dashboard-shell">
+        <aside class="sidebar">
+          <div class="brand-panel">
+            <div class="brand-badge"></div>
+            <div>
+              <p class="brand-title">武大考勤系统</p>
+              <p class="brand-subtitle">Wuhan Univ. Attendance</p>
+            </div>
+          </div>
+
+          <div class="nav-group">
+            <p class="nav-group-label">
+              {{ currentRole === 'teacher' ? '教师功能' : '学生功能' }}
+            </p>
+            <button
+              v-for="item in availableTabs"
+              :key="item.key"
+              type="button"
+              class="nav-item"
+              :class="{ active: activeTab === item.key }"
+              @click="activeTab = item.key"
+            >
+              <span class="nav-icon">{{ item.icon }}</span>
+              <span>{{ item.label }}</span>
+            </button>
+          </div>
+
+          <div class="sidebar-profile">
+            <div class="profile-avatar" :class="currentRole">
+              {{ userInitial }}
+            </div>
+            <div>
+              <p class="sidebar-profile-name">{{ userProfile.name }}</p>
+              <p class="sidebar-profile-id">{{ userProfile.id }}</p>
+            </div>
+          </div>
+        </aside>
+
+        <div class="dashboard-main">
+          <header class="top-header">
+            <div class="top-header-time">
+              当前系统时间: {{ currentTimeText }}
+            </div>
+            <div class="top-header-actions">
+              <span class="role-pill" :class="currentRole"
+                >{{ currentRole === 'teacher' ? '教师' : '学生' }}</span
+              >
+              <button type="button" class="logout-btn" @click="handleLogout">
+                退出
+              </button>
+              <div class="top-profile">
+                <div>
+                  <p class="top-profile-name">{{ userProfile.name }}</p>
+                  <p class="top-profile-meta">{{ userProfile.department }}</p>
+                </div>
+                <div class="profile-avatar small" :class="currentRole">
+                  {{ userInitial }}
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main class="content-stage">
+            <section v-if="activeTab === 'attendance'" class="page-section">
+              <div class="page-heading">
+                <div>
+                  <h2>实时考勤</h2>
+                  <p>通过摄像头采集学生人脸信息，自动完成考勤记录</p>
+                </div>
+              </div>
+
+              <div class="panel-grid panel-grid-two">
+                <article class="panel-card feature-card">
+                  <div class="panel-head">
+                    <h3>人脸识别采集</h3>
+                    <div class="panel-actions compact-actions">
+                      <select
+                        v-model="selectedLivenessMethod"
+                        class="select-shell"
+                      >
+                        <option
+                          v-for="method in livenessMethods"
+                          :key="method.key"
+                          :value="method.key"
+                        >
+                          {{ method.name }}
+                        </option>
+                      </select>
+                      <p
+                        v-if="selectedLivenessMethod === 'active'"
+                        class="helper-copy liveness-mode-hint"
+                      >
+                        点击「开始考勤」后将下发随机动作；倒计时结束约 3 秒内请完成动作并保持人脸在画面内。
+                      </p>
+                      <button
+                        type="button"
+                        class="accent-btn"
+                        @click="startAttendanceCamera"
+                      >
+                        开启摄像头
+                      </button>
+                      <button
+                        type="button"
+                        class="soft-btn"
+                        @click="stopAttendanceCamera"
+                      >
+                        关闭
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="camera-stage modern-camera-stage">
+                    <video
+                      ref="attendanceVideo"
+                      autoplay
+                      muted
+                      playsinline
+                      class="camera-feed"
+                    ></video>
+                    <canvas
+                      ref="attendanceCanvas"
+                      class="hidden-canvas"
+                    ></canvas>
+                    <div
+                      v-if="attendanceChallenge || attendanceBurstBusy || attendanceCountdown > 0"
+                      class="liveness-challenge-overlay"
+                    >
+                      <p class="liveness-challenge-label">动作活体</p>
+                      <p v-if="attendanceChallenge" class="liveness-challenge-text">
+                        {{ attendanceChallenge.prompt }}
+                      </p>
+                      <p v-if="attendanceCountdown > 0" class="liveness-countdown">
+                        {{ attendanceCountdown }} 秒后开始采集…
+                      </p>
+                      <p v-else-if="attendanceBurstBusy" class="liveness-recording">
+                        正在采集，请完成上述动作
+                      </p>
+                    </div>
+                    <div v-if="!cameraReady" class="camera-empty-state">
+                      <div class="camera-empty-icon">📷</div>
+                      <p>摄像头未开启</p>
+                    </div>
+                  </div>
+
+                  <div class="panel-footer">
+                    <span>建议正对镜头，避免背光、遮挡和多人入镜</span>
+                    <button
+                      type="button"
+                      class="accent-btn"
+                      :disabled="loading"
+                      @click="submitAttendance"
+                    >
+                      {{ loading ? '识别中...' : '开始考勤' }}
+                    </button>
+                  </div>
+                </article>
+
+                <article class="panel-card result-card">
+                  <div class="panel-head">
+                    <h3>识别结果</h3>
+                  </div>
+
+                  <div v-if="lastAttendanceResult" class="result-panel">
+                    <template v-if="lastAttendanceResult.success">
+                      <div class="status-banner success">
+                        {{
+                        lastAttendanceResult.attendance_results[0].student_name
+                        }} 已完成考勤
+                      </div>
+                      <div class="stat-chip-grid">
+                        <div class="stat-chip">
+                          <span>学号</span>
+                          <strong
+                            >{{
+                            lastAttendanceResult.attendance_results[0].student_id
+                            }}</strong
+                          >
+                        </div>
+                        <div class="stat-chip">
+                          <span>情绪</span>
+                          <strong
+                            >{{
+                            formatEmotion(lastAttendanceResult.attendance_results[0].emotion)
+                            }}</strong
+                          >
+                        </div>
+                        <div class="stat-chip">
+                          <span>识别置信度</span>
+                          <strong
+                            >{{
+                            Math.round(lastAttendanceResult.attendance_results[0].confidence
+                            * 100) }}%</strong
+                          >
+                        </div>
+                        <div class="stat-chip">
+                          <span>活体分数</span>
+                          <strong
+                            >{{ Math.round(lastAttendanceResult.liveness_score *
+                            100) }}%</strong
+                          >
+                        </div>
+                      </div>
+                      <p class="helper-copy">
+                        {{ lastAttendanceResult.boundary }}
+                      </p>
+                    </template>
+                    <template v-else>
+                      <div class="status-banner danger">
+                        {{ lastAttendanceResult.error }}
+                      </div>
+                      <p v-if="lastAttendanceResult.hint" class="helper-copy">
+                        {{ lastAttendanceResult.hint }}
+                      </p>
+                    </template>
+                  </div>
+                  <div v-else class="empty-panel-state">
+                    <div class="empty-panel-icon">◎</div>
+                    <p>等待识别结果...</p>
+                  </div>
+                </article>
+              </div>
+
+              <article class="panel-card list-card">
+                <div class="panel-head">
+                  <h3>最近考勤记录</h3>
+                  <button
+                    type="button"
+                    class="soft-btn"
+                    @click="fetchAttendanceRecords"
+                  >
+                    刷新
+                  </button>
+                </div>
+
+                <div v-if="recentAttendanceRecords.length" class="record-list">
+                  <div
+                    v-for="record in paginatedRecentAttendanceRecords"
+                    :key="record.id"
+                    class="record-row"
+                  >
+                    <div>
+                      <p class="record-name">{{ record.student_name }}</p>
+                      <p class="record-meta">
+                        {{ record.student_id }} · {{ record.class_name ||
+                        '未设置专业' }} · {{ record.activity_name || '无' }}
+                      </p>
+                    </div>
+                    <div class="record-side">
+                      <span class="emotion-tag"
+                        >{{ formatEmotion(record.emotion) }}</span
+                      >
+                      <time>{{ formatTime(record.check_time) }}</time>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="empty-list">暂无考勤记录</div>
+                <div v-if="recentAttendanceTotalPages > 1" class="pagination-bar">
+                  <button type="button" class="pagination-btn" :disabled="attendanceRecordPage <= 1" @click="goToAttendancePage(attendanceRecordPage - 1)">上一页</button>
+                  <span class="pagination-info">{{ attendanceRecordPage }} / {{ recentAttendanceTotalPages }} 页</span>
+                  <button type="button" class="pagination-btn" :disabled="attendanceRecordPage >= recentAttendanceTotalPages" @click="goToAttendancePage(attendanceRecordPage + 1)">下一页</button>
+                </div>
+              </article>
+            </section>
+
+            <section v-if="activeTab === 'group'" class="page-section">
+              <div class="page-heading">
+                <div>
+                  <h2>合照识别</h2>
+                  <p>针对课堂活动或合影照片进行批量识别与名单统计</p>
+                </div>
+              </div>
+
+              <div class="panel-grid panel-grid-two">
+                <article class="panel-card feature-card">
+                  <div class="panel-head">
+                    <h3>上传合照</h3>
+                  </div>
+
+                  <div class="form-grid">
+                    <label class="field-block slim">
+                      <span class="field-label">活动名称</span>
+                      <input
+                        v-model.trim="groupForm.activity_name"
+                        type="text"
+                        placeholder="请输入活动名称"
+                      />
+                    </label>
+
+                    <label
+                      v-if="currentRole === 'teacher'"
+                      class="field-block slim"
+                    >
+                      <span class="field-label">专业</span>
+                      <select
+                        v-model="groupForm.major"
+                        class="select-shell full-width"
+                      >
+                        <option value="不限">不限</option>
+                        <option value="网络空间安全">网络空间安全</option>
+                        <option value="信息安全">信息安全</option>
+                      </select>
+                    </label>
+
+                    <label
+                      v-if="currentRole === 'teacher'"
+                      class="field-block slim"
+                    >
+                      <span class="field-label">性别</span>
+                      <select
+                        v-model="groupForm.gender"
+                        class="select-shell full-width"
+                      >
+                        <option value="不限">不限</option>
+                        <option value="男">男</option>
+                        <option value="女">女</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="upload-card">
+                    <label class="upload-trigger">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        class="file-input"
+                        @change="onGroupFileChange"
+                      />
+                      <span>选择图片</span>
+                    </label>
+                    <p class="helper-copy">
+                      支持课堂活动、班会、实验课签到等多人场景
+                    </p>
+                    <div
+                      v-if="groupPreviewUrl"
+                      class="preview-frame wide-preview"
+                    >
+                      <img :src="groupPreviewUrl" alt="group preview" />
+                    </div>
+                  </div>
+
+                  <div class="panel-footer">
+                    <span>系统会自动缩放大图以提升识别速度</span>
+                    <button
+                      type="button"
+                      class="accent-btn"
+                      :disabled="loading"
+                      @click="submitGroupRecognition"
+                    >
+                      {{ loading ? '识别中...' : '开始识别' }}
+                    </button>
+                  </div>
+                </article>
+
+                <article class="panel-card result-card">
+                  <div class="panel-head">
+                    <h3>批量识别结果</h3>
+                  </div>
+
+                  <div v-if="groupResult" class="group-result-stack">
+                    <div class="stat-chip-grid">
+                      <div class="stat-chip">
+                        <span>检测人脸</span>
+                        <strong>{{ groupResult.total_faces }}</strong>
+                      </div>
+                      <div class="stat-chip">
+                        <span>匹配学生</span>
+                        <strong>{{ groupResult.matched_count }}</strong>
+                      </div>
+                      <div class="stat-chip">
+                        <span>未匹配</span>
+                        <strong>{{ groupResult.unknown_count }}</strong>
+                      </div>
+                      <div class="stat-chip">
+                        <span>活动名称</span>
+                        <strong>{{ groupResult.activity_name }}</strong>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="groupResult.annotated_image"
+                      class="preview-frame wide-preview"
+                    >
+                      <img
+                        :src="groupResult.annotated_image"
+                        alt="annotated result"
+                      />
+                    </div>
+
+                    <div class="mini-table">
+                      <div class="mini-table-row head">
+                        <span>姓名</span>
+                        <span>学号</span>
+                        <span>情绪</span>
+                        <span>置信度</span>
+                      </div>
+                      <div
+                        v-for="item in groupResult.results.slice(0, 8)"
+                        :key="item.student_id + '_' + (item.student_name || 'unknown') + '_' + (item.confidence || 0)"
+                        class="mini-table-row"
+                      >
+                        <span>{{ item.student_name || '未知人员' }}</span>
+                        <span>{{ item.student_id || '-' }}</span>
+                        <span>{{ formatEmotion(item.emotion) }}</span>
+                        <span
+                          >{{ Math.round((item.confidence || 0) * 100) }}%</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="empty-panel-state">
+                    <div class="empty-panel-icon">◌</div>
+                    <p>上传一张合照后，这里会显示识别统计与名单</p>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section
+              v-if="activeTab === 'students' && currentRole === 'teacher'"
+              class="page-section"
+            >
+              <div class="page-heading">
+                <div>
+                  <h2>学生管理</h2>
+                  <p>支持单人录入、批量上传与人脸库维护</p>
+                </div>
+              </div>
+
+              <div class="page-section">
+                <div class="panel-grid panel-grid-two">
+                  <article class="panel-card">
+                    <div class="panel-head">
+                      <h3>新增学生</h3>
+                    </div>
+
+                    <div class="segmented-switch">
+                      <button
+                        type="button"
+                        :class="{ active: studentInputMode === 'camera' }"
+                        @click="switchStudentInputMode('camera')"
+                      >
+                        摄像头采集
+                      </button>
+                      <button
+                        type="button"
+                        :class="{ active: studentInputMode === 'upload' }"
+                        @click="switchStudentInputMode('upload')"
+                      >
+                        本地照片上传
+                      </button>
+                    </div>
+
+                    <div
+                      v-if="studentInputMode === 'camera'"
+                      class="capture-stack"
+                    >
+                      <div class="panel-actions compact-actions left">
+                        <button
+                          type="button"
+                          class="accent-btn"
+                          @click="startStudentCamera"
+                        >
+                          启动采集
+                        </button>
+                        <button
+                          type="button"
+                          class="soft-btn"
+                          @click="stopStudentCamera"
+                        >
+                          关闭
+                        </button>
+                      </div>
+                      <div class="camera-stage narrow-camera-stage">
+                        <video
+                          ref="studentVideo"
+                          autoplay
+                          muted
+                          playsinline
+                          class="camera-feed"
+                        ></video>
+                        <canvas
+                          ref="studentCanvas"
+                          class="hidden-canvas"
+                        ></canvas>
+                        <div
+                          v-if="!studentCameraReady"
+                          class="camera-empty-state small"
+                        >
+                          <div class="camera-empty-icon">📷</div>
+                          <p>学生采集摄像头未启动</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        class="soft-btn full-width"
+                        @click="captureStudentFrame"
+                      >
+                        采集人脸
+                      </button>
+                    </div>
+
+                    <div v-else class="upload-card compact-upload">
+                      <label class="upload-trigger full-width">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          class="file-input"
+                          @change="onStudentFileChange"
+                        />
+                        <span>选择本地照片</span>
+                      </label>
+                    </div>
+
+                    <div class="form-grid single-column">
+                      <label class="field-block slim">
+                        <span class="field-label">学号</span>
+                        <input
+                          v-model.trim="newStudent.student_id"
+                          type="text"
+                          placeholder="请输入学号"
+                        />
+                      </label>
+                      <label class="field-block slim">
+                        <span class="field-label">姓名</span>
+                        <input
+                          v-model.trim="newStudent.name"
+                          type="text"
+                          placeholder="请输入姓名"
+                        />
+                      </label>
+                      <label class="field-block slim">
+                        <span class="field-label">专业</span>
+                        <input
+                          v-model.trim="newStudent.major"
+                          type="text"
+                          placeholder="请输入专业"
+                        />
+                      </label>
+                      <label class="field-block slim">
+                        <span class="field-label">性别</span>
+                        <div class="radio-row">
+                          <button
+                            type="button"
+                            class="gender-btn"
+                            :class="{ active: newStudent.gender === '男' }"
+                            @click="newStudent.gender = '男'"
+                          >
+                            男
+                          </button>
+                          <button
+                            type="button"
+                            class="gender-btn"
+                            :class="{ active: newStudent.gender === '女' }"
+                            @click="newStudent.gender = '女'"
+                          >
+                            女
+                          </button>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div
+                      v-if="studentPreviewUrl"
+                      class="preview-frame student-preview"
+                    >
+                      <img :src="studentPreviewUrl" alt="student preview" />
+                    </div>
+
+                    <div class="panel-footer end">
+                      <button
+                        type="button"
+                        class="accent-btn"
+                        :disabled="loading"
+                        @click="submitStudent"
+                      >
+                        提交录入
+                      </button>
+                    </div>
+                  </article>
+
+                  <article class="panel-card">
+                    <div class="panel-head">
+                      <h3>批量上传人脸库</h3>
+                    </div>
+
+                    <div class="upload-card compact-upload">
+                      <label class="upload-trigger full-width">
+                        <input
+                          type="file"
+                          multiple
+                          accept=".jpg,.jpeg,.png,.bmp"
+                          class="file-input"
+                          @change="onBatchFileChange"
+                        />
+                        <span>选择人脸照片（可多选）</span>
+                      </label>
+                      <p class="helper-copy">
+                        文件名格式：学号-姓名-专业-性别.jpg
+                      </p>
+                    </div>
+
+                    <div v-if="batchFiles.length" class="tag-list">
+                      <span
+                        v-for="(file, index) in batchFiles"
+                        :key="file.name + index"
+                        class="plain-tag"
+                      >
+                        {{ file.name }}
+                        <button type="button" @click="removeBatchFile(index)">
+                          ×
+                        </button>
+                      </span>
+                    </div>
+
+                    <div class="panel-footer">
+                      <span>已选择 {{ batchFiles.length }} 个文件</span>
+                      <button
+                        type="button"
+                        class="accent-btn"
+                        :disabled="batchUploading || !batchFiles.length"
+                        @click="submitBatchUpload"
+                      >
+                        {{ batchUploading ? '上传中...' : '开始批量上传' }}
+                      </button>
+                    </div>
+
+                    <div v-if="batchResults" class="batch-result-box">
+                      <p class="batch-result-title">
+                        {{ batchResults.success_count }} 成功 / {{
+                        batchResults.fail_count }} 失败
+                      </p>
+                      <div class="mini-table compact">
+                        <div class="mini-table-row head">
+                          <span>文件名</span>
+                          <span>状态</span>
+                          <span>说明</span>
+                        </div>
+                        <div
+                          v-for="item in batchResults.results.slice(0, 6)"
+                          :key="item.filename"
+                          class="mini-table-row"
+                        >
+                          <span>{{ item.filename }}</span>
+                          <span>{{ item.success ? '成功' : '失败' }}</span>
+                          <span>{{ item.message || item.error || '-' }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <h3>学生库</h3>
+                    <div class="panel-actions compact-actions">
+                      <span class="student-total">共 {{ students.length }} 人</span>
+                      <button
+                        type="button"
+                        class="soft-btn"
+                        @click="fetchStudents"
+                      >
+                        刷新
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="student-search-bar">
+                    <input
+                      v-model="studentSearchQuery"
+                      type="text"
+                      class="search-input"
+                      placeholder="搜索学号或姓名..."
+                      @input="onStudentSearchInput"
+                    />
+                  </div>
+
+                  <div class="data-table">
+                    <div class="data-table-row head">
+                      <span>学号</span>
+                      <span>姓名</span>
+                      <span>专业</span>
+                      <span>性别</span>
+                      <span>质量分数</span>
+                      <span>状态</span>
+                      <span>操作</span>
+                    </div>
+                    <div
+                      v-if="paginatedStudents.length === 0"
+                      class="empty-list"
+                    >
+                      {{ studentSearchQuery ? '未找到匹配学生' : '暂无学生数据' }}
+                    </div>
+                    <div
+                      v-for="student in paginatedStudents"
+                      :key="student.student_id"
+                      class="data-table-row"
+                    >
+                      <span>{{ student.student_id }}</span>
+                      <span>{{ student.name }}</span>
+                      <span>{{ student.major || '-' }}</span>
+                      <span>{{ student.gender || '-' }}</span>
+                      <span
+                        >{{ Math.round((student.face_quality_score || 0) * 100)
+                        }}%</span
+                      >
+                      <span
+                        >{{ student.has_face_encoding ? '已录入' : '未录入'
+                        }}</span
+                      >
+                      <span
+                        ><button
+                          type="button"
+                          class="table-action danger"
+                          @click="deleteStudent(student)"
+                        >
+                          删除
+                        </button></span
+                      >
+                    </div>
+                  </div>
+
+                  <div v-if="studentTotalPages > 1" class="pagination-bar">
+                    <button
+                      type="button"
+                      class="pagination-btn"
+                      :disabled="studentCurrentPage <= 1"
+                      @click="goToStudentPage(studentCurrentPage - 1)"
+                    >
+                      上一页
+                    </button>
+                    <span class="pagination-info">{{ studentCurrentPage }} / {{ studentTotalPages }} 页</span>
+                    <button
+                      type="button"
+                      class="pagination-btn"
+                      :disabled="studentCurrentPage >= studentTotalPages"
+                      @click="goToStudentPage(studentCurrentPage + 1)"
+                    >
+                      下一页
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section
+              v-if="activeTab === 'reports' && currentRole === 'teacher'"
+              class="page-section"
+            >
+              <div class="page-heading spread-heading">
+                <div>
+                  <h2>统计报表</h2>
+                  <p>考勤统计、情绪分析与活动参与度综合报表</p>
+                </div>
+                <div class="panel-actions compact-actions">
+                  <input
+                    v-model="selectedDate"
+                    type="date"
+                    class="date-input"
+                    @change="handleDateChange"
+                  />
+                  <button
+                    type="button"
+                    class="soft-btn"
+                    @click="handleDateChange"
+                  >
+                    刷新
+                  </button>
+                  <button
+                    type="button"
+                    class="soft-btn"
+                    @click="exportAttendance"
+                  >
+                    导出报表
+                  </button>
+                </div>
+              </div>
+
+              <div class="summary-card-grid">
+                <article class="summary-card blush">
+                  <div class="summary-icon">◎</div>
+                  <div>
+                    <p>今日考勤总数</p>
+                    <strong>{{ reportStats.todayAttendanceTotal }}</strong>
+                  </div>
+                </article>
+                <article class="summary-card mint">
+                  <div class="summary-icon">✓</div>
+                  <div>
+                    <p>考勤成功率</p>
+                    <strong>{{ reportStats.attendanceSuccessRate }}%</strong>
+                  </div>
+                </article>
+                <article class="summary-card amber">
+                  <div class="summary-icon">☺</div>
+                  <div>
+                    <p>开心情绪占比</p>
+                    <strong>{{ reportStats.happyEmotionRate }}%</strong>
+                  </div>
+                </article>
+                <article class="summary-card blue">
+                  <div class="summary-icon">群</div>
+                  <div>
+                    <p>合照识别活动</p>
+                    <strong>{{ reportStats.groupActivityCount }}</strong>
+                  </div>
+                </article>
+              </div>
+
+              <div class="panel-grid panel-grid-two report-main-grid">
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <h3>考勤状态分布</h3>
+                  </div>
+
+                  <div class="progress-stat-list">
+                    <div class="progress-stat success">
+                      <div class="progress-number">
+                        {{ reportStats.successCount }}
+                      </div>
+                      <div class="progress-main">
+                        <div class="progress-meta">
+                          <span>成功</span>
+                          <strong
+                            >{{ reportStats.attendanceSuccessRate }}%</strong
+                          >
+                        </div>
+                        <div class="progress-bar">
+                          <span
+                            :style="{ width: reportStats.attendanceSuccessRate + '%' }"
+                          ></span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="progress-stat danger">
+                      <div class="progress-number">
+                        {{ reportStats.failureCount }}
+                      </div>
+                      <div class="progress-main">
+                        <div class="progress-meta">
+                          <span>失败</span>
+                          <strong>{{ reportStats.failureRate }}%</strong>
+                        </div>
+                        <div class="progress-bar">
+                          <span
+                            :style="{ width: reportStats.failureRate + '%' }"
+                          ></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="subsection-block">
+                    <h4>各专业考勤统计</h4>
+                    <div class="major-bar-list">
+                      <div
+                        v-for="major in majorStats"
+                        :key="major.name"
+                        class="major-bar-row"
+                      >
+                        <div class="major-bar-head">
+                          <span>{{ major.name }}</span>
+                          <span>{{ major.count }} 人</span>
+                        </div>
+                        <div class="major-bar">
+                          <span :style="{ width: major.percent + '%' }"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <!-- <article class="panel-card">
+                  <div class="panel-head">
+                    <h3>情绪分析统计</h3>
+                  </div>
+
+                  <div class="emotion-overview">
+                    <div class="emotion-ring">
+                      <strong>{{ reportStats.emotionTotal }}</strong>
+                      <span>总记录</span>
+                    </div>
+                    <div class="emotion-breakdown">
+                      <div
+                        v-for="item in emotionBreakdown"
+                        :key="item.name"
+                        class="emotion-row"
+                      >
+                        <div class="emotion-label">
+                          <span
+                            class="emotion-dot"
+                            :style="{ background: item.color }"
+                          ></span>
+                          <span>{{ item.label }}</span>
+                        </div>
+                        <strong>{{ item.percent }}%</strong>
+                      </div>
+                    </div>
+                  </div> -->
+                <article class="panel-card">
+                  <div class="panel-head">
+                    <h3>情绪分析统计</h3>
+                  </div>
+
+                  <div class="emotion-overview">
+                    <!-- 👇 动态圆环图：根据百分比自动绘制 -->
+                    <div class="emotion-ring" :style="ringBackgroundStyle">
+                      <strong>{{ reportStats.emotionTotal }}</strong>
+                      <span>总记录</span>
+                    </div>
+
+                    <div class="emotion-breakdown">
+                      <div
+                        v-for="item in emotionBreakdown"
+                        :key="item.name"
+                        class="emotion-row"
+                      >
+                        <div class="emotion-label">
+                          <span
+                            class="emotion-dot"
+                            :style="{ background: item.color }"
+                          ></span>
+                          <span>{{ item.label }}</span>
+                        </div>
+                        <strong>{{ item.percent }}%</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="subsection-block">
+                    <h4>学生参与排行</h4>
+                    <div class="ranking-list">
+                      <div
+                        v-for="item in paginatedStudentRanking"
+                        :key="item.student_id"
+                        class="ranking-row"
+                      >
+                        <span class="ranking-icon">☺</span>
+                        <div>
+                          <p>{{ item.student_name }}</p>
+                          <small>{{ item.class_name || '未设置专业' }}</small>
+                        </div>
+                        <strong>{{ item.participation_count }} 次</strong>
+                      </div>
+                    </div>
+                    <div v-if="rankingTotalPages > 1" class="pagination-bar">
+                      <button type="button" class="pagination-btn" :disabled="rankingPage <= 1" @click="goToRankingPage(rankingPage - 1)">上一页</button>
+                      <span class="pagination-info">{{ rankingPage }} / {{ rankingTotalPages }} 页</span>
+                      <button type="button" class="pagination-btn" :disabled="rankingPage >= rankingTotalPages" @click="goToRankingPage(rankingPage + 1)">下一页</button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <article class="panel-card">
+                <div class="panel-head">
+                  <h3>活动参与度统计</h3>
+                </div>
+
+                <div class="activity-card-list">
+                  <article
+                    v-for="item in paginatedActivityCards"
+                    :key="item.id"
+                    class="activity-card"
+                  >
+                    <div>
+                      <p class="activity-name">{{ item.activity_name }}</p>
+                      <p class="activity-date">
+                        {{ formatTime(item.created_at) }}
+                      </p>
+                    </div>
+                    <div class="activity-rate">
+                      <span>识别率</span>
+                      <strong>{{ item.recognitionRate }}%</strong>
+                    </div>
+                    <div class="activity-meta-row">
+                      <span>总人脸 {{ item.total_faces }}</span>
+                      <span>已匹配 {{ item.matched_faces }}</span>
+                    </div>
+                  </article>
+                </div>
+                <div v-if="activityTotalPages > 1" class="pagination-bar">
+                  <button type="button" class="pagination-btn" :disabled="activityPage <= 1" @click="goToActivityPage(activityPage - 1)">上一页</button>
+                  <span class="pagination-info">{{ activityPage }} / {{ activityTotalPages }} 页</span>
+                  <button type="button" class="pagination-btn" :disabled="activityPage >= activityTotalPages" @click="goToActivityPage(activityPage + 1)">下一页</button>
+                </div>
+
+                <div class="subsection-block">
+                  <h4>考勤记录</h4>
+                  <div class="data-table compact-table">
+                    <div class="data-table-row head">
+                      <span>学号</span>
+                      <span>姓名</span>
+                      <span>专业</span>
+                      <span>情绪</span>
+                      <span>置信度</span>
+                      <span>活动名称</span>
+                      <span>时间</span>
+                    </div>
+                    <div
+                      v-for="record in paginatedReportRecords"
+                      :key="record.id"
+                      class="data-table-row"
+                    >
+                      <span>{{ record.student_id }}</span>
+                      <span>{{ record.student_name }}</span>
+                      <span>{{ record.class_name || '-' }}</span>
+                      <span>{{ formatEmotion(record.emotion) }}</span>
+                      <span
+                        >{{ Math.round((record.confidence || 0) * 100) }}%</span
+                      >
+                      <span>{{ record.activity_name || '无' }}</span>
+                      <span>{{ formatTime(record.check_time) }}</span>
+                    </div>
+                  </div>
+                  <div v-if="reportRecordTotalPages > 1" class="pagination-bar">
+                    <button type="button" class="pagination-btn" :disabled="reportRecordPage <= 1" @click="goToReportRecordPage(reportRecordPage - 1)">上一页</button>
+                    <span class="pagination-info">{{ reportRecordPage }} / {{ reportRecordTotalPages }} 页</span>
+                    <button type="button" class="pagination-btn" :disabled="reportRecordPage >= reportRecordTotalPages" @click="goToReportRecordPage(reportRecordPage + 1)">下一页</button>
+                  </div>
+                </div>
+              </article>
+            </section>
+
+            <section
+              v-if="activeTab === 'personal' && currentRole === 'student'"
+              class="page-section"
+            >
+              <div class="page-heading">
+                <div>
+                  <h2>个人考勤</h2>
+                  <p>查看当前学生账号关联的考勤记录与参与统计</p>
+                </div>
+              </div>
+
+              <div
+                v-if="studentLinkedRecordCount === 0"
+                class="panel-card info-card"
+              >
+                <p>
+                  当前登录账号暂未匹配到学生档案。你仍然可以使用实时考勤和合照识别功能；如需个人记录，请使用已录入的人名或学号登录。
+                </p>
+              </div>
+
+              <div class="summary-card-grid two-up">
+                <article class="summary-card mint">
+                  <div class="summary-icon">✓</div>
+                  <div>
+                    <p>个人考勤次数</p>
+                    <strong>{{ studentLinkedRecordCount }}</strong>
+                  </div>
+                </article>
+                <article class="summary-card blue">
+                  <div class="summary-icon">群</div>
+                  <div>
+                    <p>活动参与次数</p>
+                    <strong>{{ studentLinkedActivityCount }}</strong>
+                  </div>
+                </article>
+              </div>
+
+              <article class="panel-card">
+                <div class="panel-head">
+                  <h3>个人记录列表</h3>
+                </div>
+
+                <div
+                  v-if="personalAttendanceRecords.length"
+                  class="record-list personal-list"
+                >
+                  <div
+                    v-for="record in personalAttendanceRecords"
+                    :key="record.id"
+                    class="record-row"
+                  >
+                    <div>
+                      <p class="record-name">{{ record.student_name }}</p>
+                      <p class="record-meta">
+                        {{ record.class_name || '未设置专业' }} · {{
+                        record.activity_name || '无' }}
+                      </p>
+                    </div>
+                    <div class="record-side">
+                      <span class="emotion-tag"
+                        >{{ formatEmotion(record.emotion) }}</span
+                      >
+                      <time>{{ formatTime(record.check_time) }}</time>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="empty-list">暂无个人考勤记录</div>
+              </article>
+            </section>
+          </main>
+        </div>
+      </section>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.14/vue.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/element-ui/2.15.13/index.js"></script>
+    <script>
+      try {
+        if (typeof Vue !== 'undefined' && typeof ELEMENT !== 'undefined' && ELEMENT.install) {
+          Vue.use(ELEMENT);
+        }
+      } catch (e) {}
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <script src="utils.js"></script>
+    <script src="main.js"></script>
+  </body>
+</html>

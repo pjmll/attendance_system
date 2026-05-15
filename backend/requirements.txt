@@ -1,0 +1,11 @@
+Flask
+Flask-CORS
+opencv-python
+Pillow
+numpy
+scipy
+requests
+deepface
+tf-keras
+onnxruntime
+insightface
