@@ -216,6 +216,7 @@ def record_row_to_dict(row):
         "status": row["status"],
         "emotion": row["emotion"] or Config.DEFAULT_EMOTION_LABEL,
         "source": row["source"],
+        "activity_name": row["activity_name"] or "",
     }
 
 
